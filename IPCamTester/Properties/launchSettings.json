@@ -1,0 +1,18 @@
+{
+  "profiles": {
+    "CameraCheckerService": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_ENVIRONMENT": "Development"
+      },
+      "dotnetRunMessages": true
+    },
+    "Profile 1": {
+      "commandName": "Project"
+    },
+    "Profile 2": {
+      "commandName": "Executable"
+    }
+  },
+  "$schema": "https://json.schemastore.org/launchsettings.json"
+}
