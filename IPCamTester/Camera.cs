@@ -15,12 +15,7 @@ namespace IPCamTester
 
     public class Camera
     {
-        private Camera()
-        {
-            throw new Exception("Unreachable");
-        }
-
-        private Camera(String description, String ip, String user, String password)
+        public Camera(String? description, String ip, String user, String password, UInt16 port, String play)
         {
             _ = IPAddress.Parse(ip); // FormatException
 
@@ -30,17 +25,8 @@ namespace IPCamTester
             this.User = user;
             this.Password = password;
 
-            this.HttpInfo = null!;
-        }
-
-        public Camera(String description, String ip, String user, String password, RtspInfo info) : this(description, ip, user, password)
-        {
-            this.RtspInfo = info;
-        }
-
-        public Camera(String description, String ip, String user, String password, HttpInfo info) : this(description, ip, user, password)
-        {
-            this.HttpInfo = info;
+            this.Port = port;
+            this.Play = play;
         }
 
         public async Task<Error?> Check()
@@ -92,28 +78,42 @@ namespace IPCamTester
 
         private String as_url()
         {
-            if (this.RtspInfo is null && this.HttpInfo is null)
-            {
-                return "RtspInfo and HttpInfo is null";
-            }
-            if (this.RtspInfo is not null)
-                return $"rtsp://{this.User}:{this.Password}@{this.IP}:{this.RtspInfo.Port}{this.RtspInfo.Play}";
-            else
-                throw new NotImplementedException("http capture is not implemented yet");
+            return $"rtsp://{this.User}:{this.Password}@{this.IP}:{this.Port}{this.Play}";
         }
 
-        // Main
+
+        /*
+         *  Main
+         */
+
+        public Int32? Id { get; set; }
         public bool IsEnabled { get; set; } = true;
         public String? Description { get; set; } = null;
 
-        // Network
+
+        /*
+         *  Network
+         */
+
         public String IP { get; private set; }
         public String User { get; private set; }
         public String Password { get; private set; }
 
-        public RtspInfo? RtspInfo { get; private set; }
-        public HttpInfo HttpInfo { get; private set; }
 
+        /*
+         *  RTSP
+         */
+
+        /// <summary>
+        /// Завершающая часть RTSP-запроса "PLAY" - всё что после "rtsp://host:port", начиная с "/", адресующая конкретный медиа-поток камеры
+        /// Для проверки можете воспользоваться плеером VLC, открыв в нём URL вида rtsp://{User}:{Password}@{IP}:{PORT}{Play}
+        /// </summary>
+        public String Play { get; private set; }
+        public UInt16 Port { get; private set; } = 554;
+
+        /*
+         *  Misc
+         */
 
         public String ScreenshotPath
         {
@@ -123,7 +123,6 @@ namespace IPCamTester
             }
         }
 
-        // Misc
         private static String ScreenshotDirectory
         {
             get
@@ -144,26 +143,5 @@ namespace IPCamTester
         }
 
         private static String? _dir;
-    }
-
-    public class RtspInfo
-    {
-        public RtspInfo(String play, UInt16 port)
-        {
-            this.Play = play;
-            this.Port = port;
-        }
-
-        /// <summary>
-        /// Завершающая часть RTSP-запроса "PLAY" - всё что после "rtsp://host:port", начиная с "/", адресующая конкретный медиа-поток камеры
-        /// Для проверки можете воспользоваться плеером VLC, открыв в нём URL вида rtsp://{User}:{Password}@{IP}:{PORT}{Play}
-        /// </summary>
-        public String Play { get; private set; }
-        public UInt16 Port { get; private set; } = 554;
-    }
-
-    public class HttpInfo
-    {
-        public UInt16 Port { get; private set; } = 80;
     }
 }
