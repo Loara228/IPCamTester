@@ -7,11 +7,11 @@ using System.Text;
 
 namespace IPCamTester
 {
-    public enum VideoSrc
-    {
-        RTSP,
-        HTTP
-    }
+    // public enum VideoSrc
+    // {
+    //     RTSP,
+    //     HTTP
+    // }
 
     public class Camera
     {
@@ -59,6 +59,11 @@ namespace IPCamTester
             }
         }
 
+        public override string ToString()
+        {
+            return $"ID: '{this.Id}', IP: '{this.IP}, Description: '{this.Description}''";
+        }
+
         private async Task<Error?> CheckPing()
         {
             try
@@ -67,7 +72,7 @@ namespace IPCamTester
                 var reply = await ping.SendPingAsync(this.IP, 3000);
                 if (reply.Status == IPStatus.Success)
                     return null;
-                return new Error(ErrorType.Ping, $"{reply.Address}: {reply.Status.ToString()}");
+                return new Error(ErrorType.Ping, $"{reply.Status}");
             }
             catch (Exception exc)
             {

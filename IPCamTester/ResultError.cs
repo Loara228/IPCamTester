@@ -22,6 +22,11 @@ namespace IPCamTester
             this._msg = msg;
         }
 
+        public ErrorType GetErrorType()
+        {
+            return _type;
+        }
+
         public override string ToString()
         {
             return $"{this._type} error: {this._msg}";

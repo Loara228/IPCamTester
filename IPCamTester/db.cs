@@ -134,6 +134,20 @@ VALUES ($cameraId, $checkTime, $ping, $capture);";
             }
             return cameras;
         }
+        public static async Task<bool> SetCameraStatus(int id, bool isEnabled)
+        {
+            string updateSql = "UPDATE IpCameras SET IsEnabled = $IsEnabled WHERE Id = $Id;";
+
+            using (var command = new SqliteCommand(updateSql, _connection))
+            {
+                command.Parameters.AddWithValue("$IsEnabled", isEnabled ? 1 : 0);
+                command.Parameters.AddWithValue("$Id", id);
+
+                int rowsAffected = await command.ExecuteNonQueryAsync();
+
+                return rowsAffected > 0;
+            }
+        }
 
         public static async Task Open()
         {

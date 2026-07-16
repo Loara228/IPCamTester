@@ -3,7 +3,6 @@ using IPCamTester;
 
 if (ParseArgs(args))
 {
-    Thread.Sleep(1000);
     Environment.Exit(0);
 }
 
@@ -62,15 +61,54 @@ bool ParseArgs(string[] args)
             Database.Initialize().GetAwaiter().GetResult();
             var cameras = Database.GetCameras().GetAwaiter().GetResult();
             Database.Close().GetAwaiter().GetResult();
+            Console.WriteLine($"{"ID",-6} | {"IP-Address",-16} | {"Active",-8}");
+            Console.WriteLine(new string('-', 38)); // Разделительная линия
             foreach (var c in cameras)
             {
-                Console.WriteLine($"{c.Id} | {c.IP} | {c.IsEnabled}");
+                Console.WriteLine($"{c.Id,-6} | {c.IP,-16} | {(c.IsEnabled ? "Yes" : "No"),-6}");
             }
             return true;
-        } 
+        }
+        else if (args[i] == "--enable" || args[i] == "-e")
+        {
+            Console.WriteLine(String.Join(' ', args));
+            if (args.Length < i + 2)
+            {
+                Console.WriteLine("Argument missed: Camera ID");
+                return true;
+            }
+            if (!Int32.TryParse(args[i + 1], out Int32 id))
+            {
+                Console.WriteLine($"Failed to parse {args[i + 1]} (Int32)");
+            }
+            Database.Initialize().GetAwaiter().GetResult();
+            Database.SetCameraStatus(id, true).GetAwaiter().GetResult();
+            Database.Close().GetAwaiter().GetResult();
+            return true;
+
+        }
+        else if (args[i] == "--disable" || args[i] == "-d")
+        {
+            Console.WriteLine(String.Join(' ', args));
+            if (args.Length < i + 2)
+            {
+                Console.WriteLine("Argument missed: Camera ID");
+                return true;
+            }
+            if (!Int32.TryParse(args[i + 1], out Int32 id))
+            {
+                Console.WriteLine($"Failed to parse {args[i + 1]} (Int32)");
+            }
+            Database.Initialize().GetAwaiter().GetResult();
+            Database.SetCameraStatus(id, false).GetAwaiter().GetResult();
+            Database.Close().GetAwaiter().GetResult();
+            return true;
+
+        }
         else if (args[i] == "--help" || args[i] == "-h")
         {
-            Console.WriteLine("--insert (-i)\n --all (-a)\n");
+            Console.WriteLine("--insert (-i)\n--all (-a)\n--enable {ID} (-e)\n--disable {ID} (-d)\n--check {id} (-c)\n");
+            return true;
         }
     }
     return false;
