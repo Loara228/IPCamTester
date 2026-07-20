@@ -11,7 +11,11 @@ namespace IPCamTester
 
         public static async Task Initialize()
         {
-            _connection = new SqliteConnection("Data Source=datafile.db");
+            var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var dbPath = Path.Combine(documentsPath, "datafile.db");
+            Directory.CreateDirectory(documentsPath);
+
+            _connection = new SqliteConnection($"Data Source={dbPath}");
             await _connection.OpenAsync();
 
             using (var pragmaCmd = new SqliteCommand("PRAGMA foreign_keys = ON;", _connection))
@@ -106,7 +110,7 @@ VALUES ($cameraId, $checkTime, $ping, $capture);";
         public static async Task<List<Camera>> GetCameras()
         {
             List<Camera> cameras = new();
-            string selectSql = "SELECT Id, Ip, User, Password, IsEnabled, Description, Play, Port FROM IpCameras;";
+            string selectSql = "SELECT Id, Ip, User, Password, IsEnabled, Description, Play, Port FROM IpCameras WHERE IsEnabled = 1;";
 
             using (var command = new SqliteCommand(selectSql, _connection))
             {

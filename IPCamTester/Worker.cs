@@ -7,7 +7,6 @@ namespace IPCamTester
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            logger.LogInformation("Initializing");
             await this.Initialize();
             
             while (!stoppingToken.IsCancellationRequested)
@@ -15,7 +14,7 @@ namespace IPCamTester
                 await MainTask();
                 await Task.Delay(interval, stoppingToken); // 15 minutes
             }
-            logger.LogInformation("end");
+            logger.LogInformation("cancellation requested");
         }
 
         private async Task MainTask()
@@ -55,7 +54,7 @@ namespace IPCamTester
         {
             await Database.Initialize();
             this._cameras = await Database.GetCameras();
-            logger.LogInformation("{} loaded", _cameras.Count);
+            logger.LogInformation("{} cameras loaded", _cameras.Count);
             await Database.Close();
         }
 

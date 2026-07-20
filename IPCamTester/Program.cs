@@ -71,7 +71,6 @@ bool ParseArgs(string[] args)
         }
         else if (args[i] == "--enable" || args[i] == "-e")
         {
-            Console.WriteLine(String.Join(' ', args));
             if (args.Length < i + 2)
             {
                 Console.WriteLine("Argument missed: Camera ID");
@@ -89,7 +88,6 @@ bool ParseArgs(string[] args)
         }
         else if (args[i] == "--disable" || args[i] == "-d")
         {
-            Console.WriteLine(String.Join(' ', args));
             if (args.Length < i + 2)
             {
                 Console.WriteLine("Argument missed: Camera ID");
@@ -104,6 +102,39 @@ bool ParseArgs(string[] args)
             Database.Close().GetAwaiter().GetResult();
             return true;
 
+        }
+        else if (args[i] == "--check" || args[i] == "-c")
+        {
+            if (args.Length < i + 2)
+            {
+                Console.WriteLine("Argument missed: Camera ID");
+                return true;
+            }
+            if (!Int32.TryParse(args[i + 1], out Int32 id))
+            {
+                Console.WriteLine($"Failed to parse {args[i + 1]} (Int32)");
+            }
+            Database.Initialize().GetAwaiter().GetResult();
+            var cameras = Database.GetCameras().GetAwaiter().GetResult();
+            foreach (Camera c in cameras)
+            {
+                if (c.Id == id)
+                {
+                    var err = c.Check().GetAwaiter().GetResult();
+
+                    if (err is null)
+                        Console.WriteLine("Ping: true, capture: true");
+                    else
+                        Console.WriteLine($"Error: {err}");
+
+                    Database.Close().GetAwaiter().GetResult();
+                    return true;
+                }
+            }
+
+            Database.Close().GetAwaiter().GetResult();
+            Console.WriteLine($"Camera with id: {id} is disabled or does not exists");
+            return true;
         }
         else if (args[i] == "--help" || args[i] == "-h")
         {

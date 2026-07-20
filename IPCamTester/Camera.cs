@@ -136,7 +136,7 @@ namespace IPCamTester
                 {
                     String path = Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                        "CameraChecker"
+                        "Cameras"
                     );
 
                     if (!Path.Exists(path))
