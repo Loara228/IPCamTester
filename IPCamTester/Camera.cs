@@ -53,7 +53,7 @@ namespace IPCamTester
                 Cv2.ImWrite(screenshot_path, frame);
                 return null;
             }
-            catch(Exception exc)
+            catch (Exception exc)
             {
                 return new Error(ErrorType.Capture, exc.ToString());
             }
@@ -120,33 +120,24 @@ namespace IPCamTester
          *  Misc
          */
 
-        public String ScreenshotPath
-        {
-            get
-            {
-                return Path.Join(ScreenshotDirectory, $"{this.IP.Replace('.', '-')}.jpg");
-            }
-        }
+        public string ScreenshotPath =>
+            Path.Combine(ScreenshotDirectory, $"{IP.Replace('.', '-')}.jpg");
 
-        private static String ScreenshotDirectory
+        public static string ScreenshotDirectory
         {
             get
             {
                 if (_dir is null)
                 {
-                    String path = Path.Combine(
-                        Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-                        "Cameras"
-                    );
-
-                    if (!Path.Exists(path))
-                        Directory.CreateDirectory(path);
+                    var path = Path.Combine(Worker.WORK_DIR, "screenshots");
+                    Directory.CreateDirectory(path);
                     _dir = path;
                 }
+
                 return _dir;
             }
         }
 
-        private static String? _dir;
+        private static string? _dir;
     }
 }

@@ -11,9 +11,8 @@ namespace IPCamTester
 
         public static async Task Initialize()
         {
-            var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            var dbPath = Path.Combine(documentsPath, "datafile.db");
-            Directory.CreateDirectory(documentsPath);
+            Directory.CreateDirectory(Worker.WORK_DIR);
+            var dbPath = Path.Combine(Worker.WORK_DIR, "datafile.db");
 
             _connection = new SqliteConnection($"Data Source={dbPath}");
             await _connection.OpenAsync();

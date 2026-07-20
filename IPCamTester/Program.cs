@@ -138,7 +138,8 @@ bool ParseArgs(string[] args)
         }
         else if (args[i] == "--help" || args[i] == "-h")
         {
-            Console.WriteLine("--insert (-i)\n--all (-a)\n--enable {ID} (-e)\n--disable {ID} (-d)\n--check {id} (-c)\n");
+            Console.WriteLine("--insert (-i)\n--all (-a)\n--enable {ID} (-e)\n--disable {ID} (-d)\n--check {id} (-c)\n\n");
+            Console.WriteLine($"Directory: {Worker.WORK_DIR}");
             return true;
         }
     }

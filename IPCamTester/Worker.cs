@@ -3,12 +3,19 @@ namespace IPCamTester
     public class Worker(ILogger<Worker> logger) : BackgroundService
     {
 
+        public static readonly String WORK_DIR =
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "IPCamTester"
+            );
+
         private static readonly TimeSpan interval = TimeSpan.FromMinutes(15);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await this.Initialize();
-            
+            _ = Camera.ScreenshotDirectory;
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 await MainTask();
