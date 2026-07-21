@@ -3,6 +3,13 @@ dotnet --version: 10.0.109
 
 install:
 
+Native libs:
+
+```
+sudo apt update && sudo apt install aptitude -y
+dotnet add package OpenCvSharp4.runtime.linux-arm64 # or linux-64
+```
+
 `dotnet publish -c Release -r linux-x64 --self-contained false`
 or
 `dotnet publish -c Release -r linux-arm64 --self-contained false`
@@ -37,3 +44,9 @@ sudo systemctl enable ipcamtester
 sudo systemctl start ipcamtester
 sudo systemctl status ipcamtester
 ```
+
+todo:
+
+- Проверка времени (ONIF или API Dahua), автоматическая синхронизация времени
+
+- excel отчеты
