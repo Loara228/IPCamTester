@@ -175,12 +175,12 @@ static void ExportToExcel()
     const int IMG_HEIGHT_AS_ROWS = 23;
     const int IMG_WIDTH_AS_COLUMNS = 10;
     const int LOGS_COLUMN_COUNT = 14;
-    
+
     var output_path = Path.Combine(Worker.WORK_DIR, OUTPUT_FILENAME);
     var ruCulture = CultureInfo.GetCultureInfo("ru-RU");
 
     Console.WriteLine("Создаём таблицу...");
-    
+
     Database.Initialize().GetAwaiter().GetResult();
     var cameras = Database.GetCameras().GetAwaiter().GetResult();
 
@@ -193,18 +193,20 @@ static void ExportToExcel()
         FormatPropertiesSheet(worksheet_prop, cameras);
 
         Console.WriteLine("Создаём лист cameras...");
-        FormatCamerasSheet(
-            worksheet_cameras, 
-            cameras, 
-            OFFSET, 
-            IMG_HEIGHT_AS_ROWS, 
+        var logs = FormatCamerasSheet(
+            worksheet_cameras,
+            cameras,
+            OFFSET,
+            IMG_HEIGHT_AS_ROWS,
             IMG_WIDTH_AS_COLUMNS,
             LOGS_COLUMN_COUNT,
             ruCulture
         );
 
         Database.Close().GetAwaiter().GetResult();
-        
+
+        CreateSummaryPage(workbook, logs.total_logs, logs.error_logs);
+
         Console.WriteLine("Записываем результат...");
         workbook.SaveAs(output_path);
         Console.WriteLine($"Файл сохранён: {output_path}");
@@ -214,7 +216,7 @@ static void ExportToExcel()
 static void FormatPropertiesSheet(IXLWorksheet worksheet, List<Camera> cameras)
 {
     var headers = new[] { "ID", "IP Address", "Username", "Password", "RTSP port", "RTSP /play" };
-    
+
     for (int col = 0; col < headers.Length; col++)
     {
         var headerCell = worksheet.Cell(1, col + 1);
@@ -232,22 +234,22 @@ static void FormatPropertiesSheet(IXLWorksheet worksheet, List<Camera> cameras)
         int row = cam_idx + 2;
         var camera = cameras[cam_idx];
 
-        var values = new object[] 
-        { 
-            camera.Id.ToString(), 
-            camera.IP, 
-            camera.User, 
-            camera.Password, 
-            camera.Port.ToString(), 
-            camera.Play 
+        var values = new object[]
+        {
+            camera.Id.ToString(),
+            camera.IP,
+            camera.User,
+            camera.Password,
+            camera.Port.ToString(),
+            camera.Play
         };
-        
+
         for (int col = 0; col < values.Length; col++)
         {
             var cell = worksheet.Cell(row, col + 1);
             cell.Value = values[col]?.ToString() ?? string.Empty;
             cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
-            
+
             if (cam_idx % 2 == 0)
                 cell.Style.Fill.BackgroundColor = XLColor.FromArgb(217, 225, 242);
         }
@@ -257,13 +259,13 @@ static void FormatPropertiesSheet(IXLWorksheet worksheet, List<Camera> cameras)
     dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
     dataRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
     worksheet.Columns().AdjustToContents();
-    
+
     for (int col = 1; col <= headers.Length; col++)
         if (worksheet.Column(col).Width < 15)
             worksheet.Column(col).Width = 15;
 }
 
-static void FormatCamerasSheet(
+static (Int32 total_logs, Int32 error_logs) FormatCamerasSheet(
     IXLWorksheet worksheet,
     List<Camera> cameras,
     int offset,
@@ -272,6 +274,8 @@ static void FormatCamerasSheet(
     int logsColumnCount,
     CultureInfo culture)
 {
+    Int32 total_logs = 0, errors = 0;
+
     worksheet.Columns(imgWidth + 1, imgWidth + logsColumnCount).Width = 4;
 
     for (int cam_idx = 0; cam_idx < cameras.Count; cam_idx++)
@@ -288,7 +292,7 @@ static void FormatCamerasSheet(
         idCell.SetHyperlink(new XLHyperlink($"properties!A{cam_idx + 2}"));
 
         var titleRange = worksheet.Range(
-            row + imgHeight + 1, 2, 
+            row + imgHeight + 1, 2,
             row + imgHeight + 1, imgWidth);
         titleRange.Merge();
         titleRange.Value = camera.Description ?? "⚠️ Описание не задано в БД";
@@ -298,15 +302,22 @@ static void FormatCamerasSheet(
         titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
 
         var logs = Database.GetLastCameraLogs(camera.Id, logsColumnCount).GetAwaiter().GetResult();
+        total_logs += logs.Count;
+        foreach (var log in logs)
+        {
+            if (!log.Capture || !log.ping)
+                errors++;
+        }
         AddLogsSection(worksheet, logs, row, imgWidth, imgHeight, logsColumnCount, culture);
     }
+    return (total_logs, errors);
 }
 
 static void AddCameraImage(
-    IXLWorksheet worksheet, 
-    Camera camera, 
-    int row, 
-    int imgHeight, 
+    IXLWorksheet worksheet,
+    Camera camera,
+    int row,
+    int imgHeight,
     int imgWidth)
 {
     if (File.Exists(camera.ScreenshotPath))
@@ -330,9 +341,9 @@ static void AddCameraImage(
 }
 
 static void AddNoImagePlaceholder(
-    IXLWorksheet worksheet, 
-    int row, 
-    int imgHeight, 
+    IXLWorksheet worksheet,
+    int row,
+    int imgHeight,
     int imgWidth)
 {
     var range = worksheet.Range(row, 1, row + imgHeight, imgWidth);
@@ -371,13 +382,15 @@ static void AddLogsSection(
     }
     else
     {
-        var dateFrom = logs.Last().CheckTime.ToString("d", culture);
-        var dateTo = logs[0].CheckTime.ToString("d", culture);
+        var dateFrom = logs.First().CheckTime.ToString("d", culture);
+        var dateTo = logs.Last().CheckTime.ToString("d", culture);
         logTitleRange.Value = $"{dateFrom} - {dateTo}";
 
-        for (int logIdx = 0; logIdx < logs.Count; logIdx++)
+        var sortedLogs = logs.OrderBy(l => l.CheckTime).ToList();
+
+        for (int logIdx = 0; logIdx < sortedLogs.Count; logIdx++)
         {
-            var log = logs[logIdx];
+            var log = sortedLogs[logIdx];
             int colOffset = imgWidth + 1 + logIdx;
 
             var dateRange = worksheet.Range(row + 1, colOffset, row + 9, colOffset);
@@ -408,4 +421,59 @@ static void FormatStatusCell(IXLCell cell, bool status, string label)
     cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
     cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
     cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+}
+
+static void CreateSummaryPage(IXLWorkbook workbook, int totalLogs, int errorLogs)
+{
+    var worksheet = workbook.Worksheets.Add("Summary");
+
+    var titleCell = worksheet.Cell("A1");
+    titleCell.Value = "Отчет о логах";
+    titleCell.Style.Font.Bold = true;
+    titleCell.Style.Font.FontSize = 16;
+    titleCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+    worksheet.Range("A1:C1").Merge();
+    worksheet.Row(1).Height = 30;
+
+    int row = 3;
+
+    var statsRow = worksheet.Cell(row, 1);
+    statsRow.Value = "Статистика";
+    statsRow.Style.Font.Bold = true;
+    statsRow.Style.Font.FontSize = 12;
+    row += 2;
+
+    worksheet.Cell(row, 1).Value = "Всего логов:";
+    worksheet.Cell(row, 1).Style.Font.Bold = true;
+    worksheet.Cell(row, 2).Value = totalLogs;
+    worksheet.Cell(row, 2).Style.Font.FontSize = 11;
+    row++;
+
+    worksheet.Cell(row, 1).Value = "Логов с ошибками:";
+    worksheet.Cell(row, 1).Style.Font.Bold = true;
+    worksheet.Cell(row, 2).Value = errorLogs;
+    worksheet.Cell(row, 2).Style.Font.FontSize = 11;
+    var errorCell = worksheet.Cell(row, 2);
+    if (errorLogs > 0)
+    {
+        errorCell.Style.Font.FontColor = XLColor.Red;
+    }
+    row++;
+
+    worksheet.Cell(row, 1).Value = "Процент ошибок:";
+    worksheet.Cell(row, 1).Style.Font.Bold = true;
+    var errorPercentage = totalLogs > 0 ? (errorLogs * 100.0 / totalLogs) : 0;
+    worksheet.Cell(row, 2).Value = errorPercentage;
+    worksheet.Cell(row, 2).Style.NumberFormat.Format = "0.00\"%\"";
+    row += 2;
+    
+    worksheet.Cell(row, 1).Value = "Дата отчета:";
+    worksheet.Cell(row, 1).Style.Font.Bold = true;
+    worksheet.Cell(row, 2).Value = DateTime.Now;
+    worksheet.Cell(row, 2).Style.NumberFormat.Format = "dd/mm/yyyy hh:mm:ss";
+    row += 2;
+    
+    worksheet.Column(1).Width = 25;
+    worksheet.Column(2).Width = 30;
+    worksheet.Column(3).Width = 30;
 }
