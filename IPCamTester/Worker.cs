@@ -3,13 +3,15 @@ namespace IPCamTester
     public class Worker(ILogger<Worker> logger) : BackgroundService
     {
 
+        public static Boolean SINGLE_ITERATION_FLAG = false;
+
         public static readonly String WORK_DIR =
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "IPCamTester"
             );
 
-        private static readonly TimeSpan interval = TimeSpan.FromMinutes(15);
+        private static readonly TimeSpan interval = TimeSpan.FromHours(12);
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -18,21 +20,27 @@ namespace IPCamTester
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                await MainTask();
-                await Task.Delay(interval, stoppingToken); // 15 minutes
+                await MainTask(stoppingToken);
+                await Task.Delay(interval, stoppingToken); // 12 hours
+                
+                if (SINGLE_ITERATION_FLAG)
+                    break;
             }
-            logger.LogInformation("cancellation requested");
         }
 
-        private async Task MainTask()
+        private async Task MainTask(CancellationToken stoppingToken)
         {
             logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
             await Database.Open();
             try
             {
+                logger.LogInformation("Check started");
                 foreach (var cam in _cameras)
                 {
-                    Error? err = await cam.Check();
+                    if (stoppingToken.IsCancellationRequested)
+                        break;
+                        
+                    Error? err = await cam.Check((Logger<Worker>?)logger);
                     if (err is not null)
                     {
                         logger.LogWarning($"Error: {err}, Camera: {cam}");
@@ -43,9 +51,10 @@ namespace IPCamTester
                     else
                     {
                         await Database.AddLog(cam, true, true);
-                        await Task.Delay(100);
+                        logger.LogInformation("(Camera: {Id}) Log added to the database", cam.Id);
                     }
                 }
+                logger.LogInformation("Check completed");
             }
             catch (Exception exc)
             {

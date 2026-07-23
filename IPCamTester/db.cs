@@ -109,7 +109,7 @@ VALUES ($cameraId, $checkTime, $ping, $capture);";
         public static async Task<List<Camera>> GetCameras()
         {
             List<Camera> cameras = new();
-            string selectSql = "SELECT Id, Ip, User, Password, IsEnabled, Description, Play, Port FROM IpCameras WHERE IsEnabled = 1;";
+            String selectSql = "SELECT Id, Ip, User, Password, IsEnabled, Description, Play, Port FROM IpCameras WHERE IsEnabled = 1;";
 
             using (var command = new SqliteCommand(selectSql, _connection))
             {
@@ -137,6 +137,36 @@ VALUES ($cameraId, $checkTime, $ping, $capture);";
             }
             return cameras;
         }
+
+        public static async Task<List<CameraLog>> GetLastCameraLogs(Int32 id, Int32 limit)
+        {
+            List<CameraLog> logs = new();
+            String selectSql = "SELECT Id, CameraId, CheckTime, Ping, Capture FROM CameraLogs WHERE CameraId = @CameraId ORDER BY CheckTime DESC LIMIT @Limit;";
+
+            using (var command = new SqliteCommand(selectSql, _connection))
+            {
+                command.Parameters.AddWithValue("@CameraId", id);
+                command.Parameters.AddWithValue("@Limit", limit);
+
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        int logId = reader.GetInt32(0);
+                        int cameraId = reader.GetInt32(1);
+                        DateTime checkTime = reader.GetDateTime(2);
+                        bool ping = reader.GetInt32(3) == 1;
+                        bool capture = reader.GetInt32(4) == 1;
+
+                        var log = new CameraLog(logId, cameraId, checkTime, ping, capture);
+
+                        logs.Add(log);
+                    }
+                }
+            }
+            return logs;
+        }
+
         public static async Task<bool> SetCameraStatus(int id, bool isEnabled)
         {
             string updateSql = "UPDATE IpCameras SET IsEnabled = $IsEnabled WHERE Id = $Id;";
