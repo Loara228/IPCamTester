@@ -144,102 +144,7 @@ bool ParseArgs(string[] args)
         }
         else if (args[i] == "--save-sheet" || args[i] == "-s")
         {
-            Console.WriteLine("Создаём таблицу");
-            String output_path = Path.Combine(Worker.WORK_DIR, "export.xlsx");
-            XLWorkbook workbook = new XLWorkbook();
-            var worksheet_cameras = workbook.Worksheets.Add("cameras");
-            var worksheet_prop = workbook.Worksheets.Add("properties");
-
-            var ruCulture = CultureInfo.GetCultureInfo("ru-RU");
-
-            Database.Initialize().GetAwaiter().GetResult();
-            var cameras = Database.GetCameras().GetAwaiter().GetResult();
-
-            Console.WriteLine("Создаём лист properties");
-            // SHEET 2
-            {
-                worksheet_prop.Cell(1, 1).Value = "ID";
-                worksheet_prop.Cell(1, 2).Value = "IP Address";
-                worksheet_prop.Cell(1, 3).Value = "Username";
-                worksheet_prop.Cell(1, 4).Value = "Password";
-                worksheet_prop.Cell(1, 5).Value = "RTSP port";
-                worksheet_prop.Cell(1, 6).Value = "RTSP /play";
-
-                for (Int32 cam_idx = 0; cam_idx < cameras.Count; ++cam_idx)
-                {
-                    Int32 j = cam_idx + 2;
-                    Camera c = cameras[cam_idx];
-                    worksheet_prop.Cell(j, 1).Value = c.Id;
-                    worksheet_prop.Cell(j, 2).Value = c.IP;
-                    worksheet_prop.Cell(j, 3).Value = c.User;
-                    worksheet_prop.Cell(j, 4).Value = c.Password;
-                    worksheet_prop.Cell(j, 5).Value = c.Port;
-                    worksheet_prop.Cell(j, 6).Value = c.Play;
-                }
-
-                worksheet_prop.Columns().AdjustToContents();
-                var range = worksheet_prop.Range(1, 1, cameras.Count + 1, 6);
-                range.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
-                range.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
-            }
-
-            const Int32 OFFSET = 32;
-            const Int32 IMG_HEIGHT_AS_ROWS = 23, IMG_WIDTH_AS_COLUMNS = 10;
-
-            Console.WriteLine("Создаём лист cameras");
-            // SHEET 1
-            worksheet_cameras.Columns(IMG_WIDTH_AS_COLUMNS + 1, IMG_WIDTH_AS_COLUMNS + 14).Width = 4;
-            for (Int32 cam_idx = 0; cam_idx < cameras.Count; ++cam_idx)
-            {
-                Camera c = cameras[cam_idx];
-
-                Int32 row = cam_idx * OFFSET + 1;
-
-                if (File.Exists(c.ScreenshotPath))
-                {
-                    var pic = worksheet_cameras.AddPicture(c.ScreenshotPath);
-                    pic.MoveTo(worksheet_cameras.Cell(row, 1));
-                    pic.Width = 640;
-                    pic.Height = 480;
-                }
-                else
-                {
-                    var range = worksheet_cameras.Range(row, 1, row + IMG_HEIGHT_AS_ROWS, IMG_WIDTH_AS_COLUMNS);
-                    range.Style.Fill.BackgroundColor = XLColor.Black;
-
-                    var img_cell = worksheet_cameras.Cell(row, 1);
-                    img_cell.Value = "No image";
-                    img_cell.Style.Font.FontColor = XLColor.Red;
-                    img_cell.Style.Font.Bold = true;
-                }
-
-                var ref_cell = worksheet_cameras.Cell(row + IMG_HEIGHT_AS_ROWS + 1, 1);
-                ref_cell.Value = "ID: " + c.Id;
-                ref_cell.SetHyperlink(new XLHyperlink(worksheet_prop.Cell(cam_idx + 2, 1)));
-
-                var title_cell = worksheet_cameras.Range(row + IMG_HEIGHT_AS_ROWS + 1, 2, row + IMG_HEIGHT_AS_ROWS + 1, IMG_WIDTH_AS_COLUMNS);
-                title_cell.Merge();
-                title_cell.Value = c.Description == null ? "Описание не задано в БД" : c.Description;
-
-                var logs = Database.GetLastCameraLogs(c.Id, 14).GetAwaiter().GetResult();
-
-                var log_title_cell = worksheet_cameras.Range(row, IMG_WIDTH_AS_COLUMNS + 1, row, IMG_WIDTH_AS_COLUMNS + 14);
-                log_title_cell.Merge();
-                if (logs.Count == 0)
-                {
-                    log_title_cell.Value = "Нет ни одного лога";
-                }
-                else
-                {
-                    // total 14 logs
-                    log_title_cell.Value = $"Проверки за период с {logs.Last().CheckTime.ToString("d", ruCulture)} до {logs[0].CheckTime.ToString("d", ruCulture)}";
-                }
-            }
-
-            Database.Close().GetAwaiter().GetResult();
-            Console.WriteLine("Записываем результат");
-            workbook.SaveAs(output_path);
-            Console.WriteLine($"Output: {output_path}");
+            ExportToExcel();
             return true;
         }
         else if (args[i] == "--help" || args[i] == "-h")
@@ -261,4 +166,246 @@ bool ParseArgs(string[] args)
         }
     }
     return false;
+}
+
+static void ExportToExcel()
+{
+    const string OUTPUT_FILENAME = "export.xlsx";
+    const int OFFSET = 28;
+    const int IMG_HEIGHT_AS_ROWS = 23;
+    const int IMG_WIDTH_AS_COLUMNS = 10;
+    const int LOGS_COLUMN_COUNT = 14;
+    
+    var output_path = Path.Combine(Worker.WORK_DIR, OUTPUT_FILENAME);
+    var ruCulture = CultureInfo.GetCultureInfo("ru-RU");
+
+    Console.WriteLine("Создаём таблицу...");
+    
+    Database.Initialize().GetAwaiter().GetResult();
+    var cameras = Database.GetCameras().GetAwaiter().GetResult();
+
+    using (var workbook = new XLWorkbook())
+    {
+        var worksheet_prop = workbook.Worksheets.Add("properties");
+        var worksheet_cameras = workbook.Worksheets.Add("cameras");
+
+        Console.WriteLine("Создаём лист properties...");
+        FormatPropertiesSheet(worksheet_prop, cameras);
+
+        Console.WriteLine("Создаём лист cameras...");
+        FormatCamerasSheet(
+            worksheet_cameras, 
+            cameras, 
+            OFFSET, 
+            IMG_HEIGHT_AS_ROWS, 
+            IMG_WIDTH_AS_COLUMNS,
+            LOGS_COLUMN_COUNT,
+            ruCulture
+        );
+
+        Database.Close().GetAwaiter().GetResult();
+        
+        Console.WriteLine("Записываем результат...");
+        workbook.SaveAs(output_path);
+        Console.WriteLine($"Файл сохранён: {output_path}");
+    }
+}
+
+static void FormatPropertiesSheet(IXLWorksheet worksheet, List<Camera> cameras)
+{
+    var headers = new[] { "ID", "IP Address", "Username", "Password", "RTSP port", "RTSP /play" };
+    
+    for (int col = 0; col < headers.Length; col++)
+    {
+        var headerCell = worksheet.Cell(1, col + 1);
+        headerCell.Value = headers[col];
+        headerCell.Style.Font.Bold = true;
+        headerCell.Style.Font.FontSize = 12;
+        headerCell.Style.Font.FontColor = XLColor.White;
+        headerCell.Style.Fill.BackgroundColor = XLColor.FromArgb(31, 78, 121);
+        headerCell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        headerCell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+    }
+
+    for (int cam_idx = 0; cam_idx < cameras.Count; cam_idx++)
+    {
+        int row = cam_idx + 2;
+        var camera = cameras[cam_idx];
+
+        var values = new object[] 
+        { 
+            camera.Id.ToString(), 
+            camera.IP, 
+            camera.User, 
+            camera.Password, 
+            camera.Port.ToString(), 
+            camera.Play 
+        };
+        
+        for (int col = 0; col < values.Length; col++)
+        {
+            var cell = worksheet.Cell(row, col + 1);
+            cell.Value = values[col]?.ToString() ?? string.Empty;
+            cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            
+            if (cam_idx % 2 == 0)
+                cell.Style.Fill.BackgroundColor = XLColor.FromArgb(217, 225, 242);
+        }
+    }
+
+    var dataRange = worksheet.Range(1, 1, cameras.Count + 1, headers.Length);
+    dataRange.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+    dataRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+    worksheet.Columns().AdjustToContents();
+    
+    for (int col = 1; col <= headers.Length; col++)
+        if (worksheet.Column(col).Width < 15)
+            worksheet.Column(col).Width = 15;
+}
+
+static void FormatCamerasSheet(
+    IXLWorksheet worksheet,
+    List<Camera> cameras,
+    int offset,
+    int imgHeight,
+    int imgWidth,
+    int logsColumnCount,
+    CultureInfo culture)
+{
+    worksheet.Columns(imgWidth + 1, imgWidth + logsColumnCount).Width = 4;
+
+    for (int cam_idx = 0; cam_idx < cameras.Count; cam_idx++)
+    {
+        var camera = cameras[cam_idx];
+        int row = cam_idx * offset + 1;
+
+        AddCameraImage(worksheet, camera, row, imgHeight, imgWidth);
+
+        var idCell = worksheet.Cell(row + imgHeight + 1, 1);
+        idCell.Value = $"ID: {camera.Id}";
+        idCell.Style.Font.Bold = true;
+        idCell.Style.Font.FontSize = 11;
+        idCell.SetHyperlink(new XLHyperlink($"properties!A{cam_idx + 2}"));
+
+        var titleRange = worksheet.Range(
+            row + imgHeight + 1, 2, 
+            row + imgHeight + 1, imgWidth);
+        titleRange.Merge();
+        titleRange.Value = camera.Description ?? "⚠️ Описание не задано в БД";
+        titleRange.Style.Font.Bold = true;
+        titleRange.Style.Font.FontSize = 14;
+        // titleRange.Style.Fill.BackgroundColor = XLColor.FromArgb(242, 242, 242);
+        titleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
+
+        var logs = Database.GetLastCameraLogs(camera.Id, logsColumnCount).GetAwaiter().GetResult();
+        AddLogsSection(worksheet, logs, row, imgWidth, imgHeight, logsColumnCount, culture);
+    }
+}
+
+static void AddCameraImage(
+    IXLWorksheet worksheet, 
+    Camera camera, 
+    int row, 
+    int imgHeight, 
+    int imgWidth)
+{
+    if (File.Exists(camera.ScreenshotPath))
+    {
+        try
+        {
+            var picture = worksheet.AddPicture(camera.ScreenshotPath);
+            picture.MoveTo(worksheet.Cell(row, 1));
+            picture.Width = 640;
+            picture.Height = 480;
+        }
+        catch
+        {
+            AddNoImagePlaceholder(worksheet, row, imgHeight, imgWidth);
+        }
+    }
+    else
+    {
+        AddNoImagePlaceholder(worksheet, row, imgHeight, imgWidth);
+    }
+}
+
+static void AddNoImagePlaceholder(
+    IXLWorksheet worksheet, 
+    int row, 
+    int imgHeight, 
+    int imgWidth)
+{
+    var range = worksheet.Range(row, 1, row + imgHeight, imgWidth);
+    range.Merge();
+    range.Style.Fill.BackgroundColor = XLColor.Black;
+    range.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+    range.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+    range.Value = "❌ Изображение не найдено";
+    range.Style.Font.FontColor = XLColor.Red;
+    range.Style.Font.Bold = true;
+    range.Style.Font.FontSize = 14;
+}
+
+static void AddLogsSection(
+    IXLWorksheet worksheet,
+    List<CameraLog> logs,
+    int row,
+    int imgWidth,
+    int imgHeight,
+    int logsColumnCount,
+    CultureInfo culture)
+{
+    var logTitleRange = worksheet.Range(
+        row, imgWidth + 1,
+        row, imgWidth + logsColumnCount);
+    logTitleRange.Merge();
+    logTitleRange.Style.Font.Bold = true;
+    logTitleRange.Style.Font.FontSize = 12;
+    logTitleRange.Style.Fill.BackgroundColor = XLColor.FromArgb(79, 129, 189);
+    logTitleRange.Style.Font.FontColor = XLColor.White;
+    logTitleRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+    if (logs.Count == 0)
+    {
+        logTitleRange.Value = "📭 Нет ни одного лога";
+    }
+    else
+    {
+        var dateFrom = logs.Last().CheckTime.ToString("d", culture);
+        var dateTo = logs[0].CheckTime.ToString("d", culture);
+        logTitleRange.Value = $"{dateFrom} - {dateTo}";
+
+        for (int logIdx = 0; logIdx < logs.Count; logIdx++)
+        {
+            var log = logs[logIdx];
+            int colOffset = imgWidth + 1 + logIdx;
+
+            var dateRange = worksheet.Range(row + 1, colOffset, row + 9, colOffset);
+            dateRange.Merge();
+            dateRange.Value = log.CheckTime.ToString("dd/MM/yyyy\nHH:mm:ss");
+            dateRange.Style.Alignment.SetTextRotation(90);
+            dateRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+            dateRange.Style.Alignment.Vertical = XLAlignmentVerticalValues.Bottom;
+            dateRange.Style.Font.FontSize = 9;
+            dateRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            var pingCell = worksheet.Cell(row + 10, colOffset);
+            FormatStatusCell(pingCell, log.ping, "P");
+
+            var captureCell = worksheet.Cell(row + 11, colOffset);
+            FormatStatusCell(captureCell, log.Capture, "C");
+        }
+    }
+}
+
+static void FormatStatusCell(IXLCell cell, bool status, string label)
+{
+    cell.Value = label;
+    cell.Style.Font.Bold = true;
+    cell.Style.Font.FontSize = 10;
+    cell.Style.Font.FontColor = XLColor.White;
+    cell.Style.Fill.BackgroundColor = status ? XLColor.DarkGreen : XLColor.DarkRed;
+    cell.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+    cell.Style.Alignment.Vertical = XLAlignmentVerticalValues.Center;
+    cell.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
 }
